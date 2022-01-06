@@ -3,7 +3,8 @@
 <plist version="1.0">
 <dict>
 	<key>provisioningProfiles</key>
-	<dict>
-	</dict>
+	<dict/>
+	<key>method</key>
+	<string>ad-hoc</string>
 </dict>
 </plist>
