@@ -84,15 +84,15 @@ async Task InstallProvisioningProfileAsync(string provisioningProfileFilePath)
     // If the file has already been installed, ignore it.
 
     var provisioningProfileFileInfo = new FileInfo(provisioningProfileFilePath);
-    if (provisioningProfileFileInfo.DirectoryName == macOsProvisioningProfileDirectoryPath)
+    var rootDict = (await GetProvisioningProfileAsNsDictionaryAsync(provisioningProfileFilePath))!;
+    var provisioningProfileUuid = ExtractUuidFromProvisioningProfile(rootDict);
+    if (Directory.EnumerateFiles(macOsProvisioningProfileDirectoryPath).Any(x => new FileInfo(x).Name.Contains(provisioningProfileUuid)))
     {
         Console.WriteLine(
             $"Provisioning profile: {provisioningProfileFilePath} has already been installed. Skipping...");
         return;
     }
 
-    var rootDict = (await GetProvisioningProfileAsNsDictionaryAsync(provisioningProfileFilePath))!;
-    var provisioningProfileUuid = ExtractUuidFromProvisioningProfile(rootDict);
     File.Copy(provisioningProfileFilePath,
         Path.Combine(macOsProvisioningProfileDirectoryPath,
             Path.ChangeExtension(provisioningProfileUuid, provisioningProfileFileInfo.Extension)), true);
