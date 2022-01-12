@@ -5,22 +5,27 @@ using System.Text;
 using Claunia.PropertyList;
 using CommandLine;
 using GenerateXCodeBuildExportOptions;
-using GenerateXCodeBuildExportOptions.Model;
+using GenerateXCodeBuildExportOptions.Models;
+using GenerateXCodeBuildExportOptions.Services;
 
 await Parser.Default.ParseArguments<ArgumentOption>(args).MapResult(async option =>
 {
     try
     {
-        if (option.ProvisioningProfiles.Any())
-        {
-            Console.WriteLine("Start installing provisioning profiles...");
-            await Task.WhenAll(option.ProvisioningProfiles.Select(InstallProvisioningProfileAsync));
-            var provisioningProfileDatum =
-                await Task.WhenAll(option.ProvisioningProfiles.Select(ExtractProvisioningProfileMetaDatumAsync));
+        var provisioningProfiles =
+            (await DownloadProvisioningProfilesAsync(
+                option.BundleIdentifiers,
+                option.AppStoreConnectApiPrivateKeyPath,
+                option.AppStoreConnectApiPrivateKeyId,
+                option.AppStoreConnectIssuerId)).ToHashSet();
 
-            GenerateExportOptions(provisioningProfileDatum, option.Output);
-        }
+        Console.WriteLine("Start installing provisioning profiles...");
+        await Task.WhenAll(provisioningProfiles.Select(x =>
+            InstallProvisioningProfileAsync(x.ProvisioningProfileFilePath)));
+        var provisioningProfileDatum =
+            await Task.WhenAll(provisioningProfiles.Select(ExtractProvisioningProfileMetaDatumAsync));
 
+        GenerateExportOptions(provisioningProfileDatum, option.Output);
 
         Console.WriteLine("Done");
     }
@@ -33,17 +38,33 @@ await Parser.Default.ParseArguments<ArgumentOption>(args).MapResult(async option
 {
     foreach (var err in errors)
     {
-        Console.WriteLine(err.ToString());
+        Console.WriteLine(err?.ToString());
     }
 
     return Task.FromResult(1);
 });
 
-void GenerateExportOptions(IEnumerable<ProvisioningProfileMetaData?> provisioningProfileMetaDatum,
+async Task<IEnumerable<DownloadedProvisioningProfile>> DownloadProvisioningProfilesAsync(
+    IEnumerable<string> bundleIdentifiers,
+    string appStoreConnectApiPrivateKeyPath,
+    string appStoreConnectApiPrivateKeyId,
+    string appStoreConnectIssuerId)
+{
+    var appStoreConnectApiHandler = new AppStoreConnectApiHandler(
+        bundleIdentifiers.ToHashSet(),
+        appStoreConnectApiPrivateKeyPath,
+        appStoreConnectApiPrivateKeyId,
+        appStoreConnectIssuerId);
+    return await appStoreConnectApiHandler.DownloadProvisioningProfilesAsync();
+}
+
+void GenerateExportOptions(
+    IEnumerable<ProvisioningProfileMetaData> provisioningProfileMetaDatum,
     string optionOutput)
 {
     provisioningProfileMetaDatum =
-        provisioningProfileMetaDatum.Where(x => x != null);
+        provisioningProfileMetaDatum.Where(x =>
+            x.ProvisioningProfileType == ProvisioningProfileType.IosAppAdhoc);
 
     // Use Assembly.GetExecutingAssembly().GetManifestResourceNames() to get the Manifest Resource name.
 
@@ -63,17 +84,21 @@ void GenerateExportOptions(IEnumerable<ProvisioningProfileMetaData?> provisionin
     PropertyListParser.SaveAsXml(rootDict, outputFileInfo);
 }
 
-async Task<ProvisioningProfileMetaData> ExtractProvisioningProfileMetaDatumAsync(string provisioningProfileFilePath)
+async Task<ProvisioningProfileMetaData> ExtractProvisioningProfileMetaDatumAsync(
+    DownloadedProvisioningProfile downloadedProvisioningProfile)
 {
-    var rootDict = (await GetProvisioningProfileAsNsDictionaryAsync(provisioningProfileFilePath))!;
+    var rootDict =
+        (await GetProvisioningProfileAsNsDictionaryAsync(downloadedProvisioningProfile.ProvisioningProfileFilePath))!;
     var provisioningProfileUuid = ExtractUuidFromProvisioningProfile(rootDict);
 
     var applicationIdentifierPrefixes = (rootDict.ObjectForKey("ApplicationIdentifierPrefix") as NSArray)!;
     var applicationIdentifier =
         (rootDict.ObjectForKey("Entitlements") as NSDictionary)!.ObjectForKey("application-identifier").ToString()!;
-    var applicationIdentifierPrefix = applicationIdentifierPrefixes.FirstOrDefault(x => applicationIdentifier.StartsWith(x.ToString()!));
+    var applicationIdentifierPrefix =
+        applicationIdentifierPrefixes.FirstOrDefault(x => applicationIdentifier.StartsWith(x.ToString()!));
     var bundleIdentifier = applicationIdentifier.Replace($"{applicationIdentifierPrefix}.", "");
-    return new ProvisioningProfileMetaData(bundleIdentifier, provisioningProfileUuid);
+    return new ProvisioningProfileMetaData(bundleIdentifier, provisioningProfileUuid,
+        downloadedProvisioningProfile.Type);
 }
 
 async Task InstallProvisioningProfileAsync(string provisioningProfileFilePath)
@@ -86,7 +111,8 @@ async Task InstallProvisioningProfileAsync(string provisioningProfileFilePath)
     var provisioningProfileFileInfo = new FileInfo(provisioningProfileFilePath);
     var rootDict = (await GetProvisioningProfileAsNsDictionaryAsync(provisioningProfileFilePath))!;
     var provisioningProfileUuid = ExtractUuidFromProvisioningProfile(rootDict);
-    if (Directory.EnumerateFiles(macOsProvisioningProfileDirectoryPath).Any(x => new FileInfo(x).Name.Contains(provisioningProfileUuid)))
+    if (Directory.EnumerateFiles(macOsProvisioningProfileDirectoryPath)
+        .Any(x => new FileInfo(x).Name.Contains(provisioningProfileUuid)))
     {
         Console.WriteLine(
             $"Provisioning profile: {provisioningProfileFilePath} has already been installed. Skipping...");
