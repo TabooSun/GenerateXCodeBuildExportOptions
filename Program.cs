@@ -106,6 +106,9 @@ async Task InstallProvisioningProfileAsync(string provisioningProfileFilePath)
     var macOsProvisioningProfileDirectoryPath =
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) +
         @"/Library/MobileDevice/Provisioning Profiles";
+
+    Directory.CreateDirectory(macOsProvisioningProfileDirectoryPath);
+
     // If the file has already been installed, ignore it.
 
     var provisioningProfileFileInfo = new FileInfo(provisioningProfileFilePath);
