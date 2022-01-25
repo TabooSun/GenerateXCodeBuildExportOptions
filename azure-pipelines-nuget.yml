@@ -1,0 +1,49 @@
+trigger:
+  batch: true
+  branches:
+    include:
+    - master
+
+pr:
+- master
+
+variables:
+  dotnetSdkVersion: '6.x'
+  projects: '**/*.csproj'
+  buildConfiguration: 'Release'
+
+name: $(Year:yyyy).$(Month).$(DayOfMonth)$(Rev:.r)
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+- task: UseDotNet@2
+  displayName: 'Use .NET SDK $(dotnetSdkVersion)'
+  inputs:
+    packageType: 'sdk'
+    version: '$(dotnetSdkVersion)'
+
+- task: DotNetCoreCLI@2
+  displayName: 'Build Project'
+  inputs:
+    command: 'build'
+    projects: $(projects)
+    arguments: '--configuration $(buildConfiguration)'
+
+- ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
+  - task: DotNetCoreCLI@2
+    displayName: 'Pack Project'
+    inputs:
+      command: 'pack'
+      packagesToPack: $(projects)
+      configuration: '$(buildConfiguration)'
+      nobuild: true
+      versioningScheme: 'byBuildNumber'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact'
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)'
+      ArtifactName: 'drop'
+      publishLocation: 'Container'
