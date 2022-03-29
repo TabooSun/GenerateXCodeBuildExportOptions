@@ -24,6 +24,9 @@ public class ArgumentOption
             "The App Store Connect issuer id. You can get it from https://appstoreconnect.apple.com/access/api. Go to the API key tab to copy it.")]
     public string AppStoreConnectIssuerId { get; set; } = null!;
 
+    [Option("signing-profile-types", Required = true, HelpText = "The provisioning profile types. Check https://developer.apple.com/documentation/appstoreconnectapi/list_and_download_profiles for all the possible values.")]
+    public IEnumerable<string> SigningProfileTypes { get; set; } = null!;
+
     [Option('o', "output", Default = ExportOptionsDefaultFileName, HelpText = "The ExportOptions.plist output path.")]
     public string Output { get; set; } = null!;
 }

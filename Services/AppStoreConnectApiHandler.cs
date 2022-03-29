@@ -20,16 +20,21 @@ public class AppStoreConnectApiHandler
 
     public string AppStoreConnectIssuerId { get; }
 
+    public HashSet<string> SigningProfileTypes { get; }
+
     public AppStoreConnectApiHandler(
         HashSet<string> bundleIds,
         string appStoreConnectApiPrivateKeyPath,
         string appStoreConnectApiPrivateKeyId,
-        string appStoreConnectIssuerId)
+        string appStoreConnectIssuerId,
+        HashSet<string> signingProfileTypes
+    )
     {
         BundleIds = bundleIds;
         AppStoreConnectApiPrivateKeyPath = appStoreConnectApiPrivateKeyPath;
         AppStoreConnectIssuerId = appStoreConnectIssuerId;
         AppStoreConnectApiPrivateKeyId = appStoreConnectApiPrivateKeyId;
+        SigningProfileTypes = signingProfileTypes;
     }
 
     /// <summary>
@@ -47,7 +52,7 @@ public class AppStoreConnectApiHandler
         {
             { "include", bundleIdToken },
             // Filter only IOS provisioning profiles.
-            { "filter[profileType]", new HashSet<string> { "IOS_APP_STORE", "IOS_APP_ADHOC" } },
+            { "filter[profileType]", SigningProfileTypes },
             { "fields[bundleIds]", "identifier" },
             {
                 "fields[profiles]",
